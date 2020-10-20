@@ -310,12 +310,11 @@ class SubForm : Form
             var name = Path.GetFileName(file);
             if(string.Compare(d1, name) <= 0 && string.Compare(d2, name) >= 0)
             {
-                var parser = new TextFieldParser(name, Encoding.GetEncoding(encoding));
-                using(parser)
+                using(var parser = new TextFieldParser(name, Encoding.GetEncoding(encoding)))
                 {
                     parser.TextFieldType = FieldType.Delimited;
                     parser.SetDelimiters(",");
-                    parser.HasFieldsEnclosedInQuotes = true;
+                    parser.HasFieldsEnclosedInQuotes = false;
                     parser.TrimWhiteSpace = true;
                     while(!parser.EndOfData)
                     {
@@ -323,6 +322,10 @@ class SubForm : Form
                         if(row.Count() < 5)
                         {
                             continue;
+                        }
+                        for(var i = 0; i < row.Length; i++)
+                        {
+                            row[i] = row[i].Trim('"');
                         }
                         long interval;
                         if(!long.TryParse(row[1], out interval))
