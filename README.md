@@ -1,4 +1,4 @@
-# WATCH
+# ![WATCH](app.ico) WATCH
 
 ## 概要
 
@@ -13,7 +13,7 @@
 
 ### 【コンパイル方法】
 
-- 「watch.cs」と同じ場所に「compile.bat」を保存して実行してください。
+- 「watch.cs」と同じ場所に「build.bat」を保存して実行してください。
 
 ## 設定
 
@@ -25,15 +25,19 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <config>
   <interval>60000</interval>
+  <directory>log</directory>
   <encoding>shift_jis</encoding>
   <history>10</history>
+  <doublebuffered>false</doublebuffered>
 </config>
 ```
 
 ### 【設定内容】
 
-|タグ    |説明                                                  |
-|--------|------------------------------------------------------|
-|interval|ログが記録されるインターバルをミリ秒単位に設定します。|
-|encoding|ログファイルの文字コードを設定します。                |
-|history |照会できるログファイルの最大件数を設定します。        |
+|タグ          |説明                                                        |
+|--------------|------------------------------------------------------------|
+|interval      |ログが記録されるインターバルをミリ秒単位に設定します。      |
+|directory     |ログファイルを格納するディレクトリを設定します。            |
+|encoding      |ログファイルの文字コードを設定します。                      |
+|history       |照会できるログファイルの最大件数を設定します。              |
+|doublebuffered|データグリッドビューがちらつく場合はtrueを設定してください。|
