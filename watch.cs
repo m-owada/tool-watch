@@ -512,7 +512,6 @@ class SubForm2 : Form
         this.FormBorderStyle = FormBorderStyle.Sizable;
         this.Icon = Icon.ExtractAssociatedIcon(Process.GetCurrentProcess().MainModule.FileName);
         this.Load += OnFormLoad;
-        this.Resize += OnFormResize;
         
         // ラベル1
         var label1 = new Label();
@@ -579,8 +578,11 @@ class SubForm2 : Form
         dataGridView1.Location = new Point(10, 40);
         dataGridView1.Size = new Size(485, 400);
         dataGridView1.DataSource = dataSource1;
-        dataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        dataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
         dataGridView1.AllowUserToAddRows = false;
+        dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        dataGridView1.RowHeadersWidthSizeMode = DataGridViewRowHeadersWidthSizeMode.EnableResizing;
+        dataGridView1.AllowUserToResizeColumns = false;
         dataGridView1.AllowUserToResizeRows = false;
         dataGridView1.MultiSelect = false;
         dataGridView1.ReadOnly = true;
@@ -620,18 +622,6 @@ class SubForm2 : Form
             dataGridView1.GetType().InvokeMember("DoubleBuffered", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.SetProperty, null, dataGridView1, new object[]{ true });
         }
         SetDataGridView1();
-    }
-    
-    private void OnFormResize(object sender, EventArgs e)
-    {
-        ResizeDataGridView1();
-    }
-    
-    private void ResizeDataGridView1()
-    {
-        dataGridView1.AutoResizeColumn(0, DataGridViewAutoSizeColumnMode.AllCells);
-        dataGridView1.AutoResizeColumn(1, DataGridViewAutoSizeColumnMode.AllCells);
-        dataGridView1.AutoResizeColumn(2, DataGridViewAutoSizeColumnMode.AllCells);
     }
     
     private void Dtp1_ValueChanged(object sender, EventArgs e)
@@ -679,6 +669,7 @@ class SubForm2 : Form
     private void SetDataGridView1()
     {
         dataSource1.Clear();
+        dataSource1.RaiseListChangedEvents = false;
         var totalTime = new TimeSpan();
         var path = directory + @"\" + dtp1.Value.ToString("yyyyMMdd") + ".log";
         if(File.Exists(path))
@@ -729,6 +720,16 @@ class SubForm2 : Form
             }
         }
         textBox1.Text = totalTime.ToString();
+        dataSource1.RaiseListChangedEvents = true;
+        dataSource1.ResetBindings();
         ResizeDataGridView1();
+    }
+    
+    private void ResizeDataGridView1()
+    {
+        dataGridView1.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+        dataGridView1.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+        dataGridView1.Columns[2].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+        dataGridView1.Columns[3].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
     }
 }
