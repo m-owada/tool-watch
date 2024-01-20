@@ -494,7 +494,7 @@ class SubForm2 : Form
     private Button button4 = new Button();
     private TextBox textBox1 = new TextBox();
     private DataGridView dataGridView1 = new DataGridView();
-    private BindingList<Columns1> dataSource1 = new BindingList<Columns1>();
+    private SortableBindingList<Columns1> dataSource1 = new SortableBindingList<Columns1>();
     
     private string directory = string.Empty;
     private string encoding = string.Empty;
@@ -580,6 +580,7 @@ class SubForm2 : Form
         dataGridView1.DataSource = dataSource1;
         dataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
         dataGridView1.AllowUserToAddRows = false;
+        dataGridView1.AllowUserToDeleteRows = false;
         dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
         dataGridView1.RowHeadersWidthSizeMode = DataGridViewRowHeadersWidthSizeMode.EnableResizing;
         dataGridView1.AllowUserToResizeColumns = false;
@@ -669,6 +670,7 @@ class SubForm2 : Form
     private void SetDataGridView1()
     {
         dataSource1.Clear();
+        dataSource1.RemoveSort();
         dataSource1.RaiseListChangedEvents = false;
         var totalTime = new TimeSpan();
         var path = directory + @"\" + dtp1.Value.ToString("yyyyMMdd") + ".log";
@@ -727,9 +729,109 @@ class SubForm2 : Form
     
     private void ResizeDataGridView1()
     {
-        dataGridView1.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
-        dataGridView1.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
-        dataGridView1.Columns[2].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
-        dataGridView1.Columns[3].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+        if(dataSource1.Count > 0)
+        {
+            dataGridView1.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+            dataGridView1.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+            dataGridView1.Columns[2].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+            dataGridView1.Columns[3].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+        }
+        else
+        {
+            dataGridView1.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+            dataGridView1.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+            dataGridView1.Columns[2].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+            dataGridView1.Columns[3].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+        }
+    }
+}
+
+class SortableBindingList<T> : BindingList<T>
+{
+    private PropertyDescriptor sortProperty;
+    private ListSortDirection sortDirection = ListSortDirection.Ascending;
+    private bool isSorted;
+    
+    public SortableBindingList()
+    {
+    }
+    
+    public SortableBindingList(IList<T> list) : base(list)
+    {
+    }
+    
+    public void RemoveSort()
+    {
+        RemoveSortCore();
+    }
+    
+    protected override bool SupportsSortingCore
+    {
+        get { return true; }
+    }
+    
+    protected override PropertyDescriptor SortPropertyCore
+    {
+        get { return sortProperty; }
+    }
+    
+    protected override ListSortDirection SortDirectionCore
+    {
+        get { return sortDirection; }
+    }
+    
+    protected override bool IsSortedCore
+    {
+        get { return isSorted; }
+    }
+    
+    protected override void RemoveSortCore()
+    {
+        sortProperty = null;
+        sortDirection = ListSortDirection.Ascending;
+        isSorted = false;
+    }
+    
+    protected override void ApplySortCore(PropertyDescriptor property, ListSortDirection direction)
+    {
+        var list = Items as List<T>;
+        if(list != null)
+        {
+            sortProperty = property;
+            sortDirection = direction;
+            isSorted = true;
+            list.Sort(Compare);
+            OnListChanged(new ListChangedEventArgs(ListChangedType.Reset, -1));
+        }
+    }
+    
+    private int Compare(T x, T y)
+    {
+        var result = OnComparison(x, y);
+        return (sortDirection == ListSortDirection.Ascending) ? result : - result;
+    }
+    
+    private int OnComparison(T x, T y)
+    {
+        object xValue = (x == null) ? null : sortProperty.GetValue(x);
+        object yValue = (y == null) ? null : sortProperty.GetValue(y);
+        
+        if(xValue == null)
+        {
+            return (yValue == null) ? 0 : -1;
+        }
+        if(yValue == null)
+        {
+            return 1;
+        }
+        if(xValue is IComparable)
+        {
+            return ((IComparable)xValue).CompareTo(yValue);
+        }
+        if(xValue.Equals(yValue))
+        {
+            return 0;
+        }
+        return xValue.ToString().CompareTo(yValue.ToString());
     }
 }
