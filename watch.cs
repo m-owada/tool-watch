@@ -75,6 +75,7 @@ class MainForm : Form
     private string encoding = "shift_jis";
     private int history = 10;
     private bool doublebuffered = false;
+    private const string LogFileName = "watch.txt";
     
     public MainForm()
     {
@@ -94,8 +95,8 @@ class MainForm : Form
         // メニュー
         var menu = new ContextMenuStrip();
         menu.Items.Add(SetMenuItem("&ログ"));
+        menu.Items.Add(SetMenuItem("&日別", Day_Click));
         menu.Items.Add(SetMenuItem("&集計", Sum_Click));
-        menu.Items.Add(SetMenuItem("&ビューア", Viewer_Click));
         menu.Items.Add(SetMenuItem("&終了", Close_Click));
         
         // タスクトレイ
@@ -145,12 +146,11 @@ class MainForm : Form
     
     private void Log_Click(object sender, EventArgs e)
     {
-        var name1 = GetLogDirectory() + @"\" + ((ToolStripMenuItem)sender).Text;
-        if(File.Exists(name1))
+        var path = GetLogDirectory() + @"\" + ((ToolStripMenuItem)sender).Text;
+        if(File.Exists(path))
         {
-            var name2 = "watch.txt";
-            File.Copy(name1, name2, true);
-            Process.Start(name2);
+            File.Copy(path, LogFileName, true);
+            Process.Start(LogFileName);
         }
         else
         {
@@ -161,12 +161,12 @@ class MainForm : Form
     private void Sum_Click(object sender, EventArgs e)
     {
         SetMenuItemsEnabled(false);
-        SubForm1 subForm = new SubForm1(GetLogDirectory(), encoding);
+        SubForm1 subForm = new SubForm1(GetLogDirectory(), encoding, doublebuffered);
         subForm.ShowDialog();
         SetMenuItemsEnabled(true);
     }
     
-    private void Viewer_Click(object sender, EventArgs e)
+    private void Day_Click(object sender, EventArgs e)
     {
         SetMenuItemsEnabled(false);
         SubForm2 subForm = new SubForm2(GetLogDirectory(), encoding, doublebuffered);
@@ -185,7 +185,7 @@ class MainForm : Form
     
     private void NotifyIcon_DoubleClick(object sender, EventArgs e)
     {
-        notifyIcon.ContextMenuStrip.Items[2].PerformClick();
+        notifyIcon.ContextMenuStrip.Items[1].PerformClick();
     }
     
     private void SetMenuItemsEnabled(bool enabled)
@@ -303,62 +303,150 @@ class SubForm1 : Form
     private DateTimePicker dtp1 = new DateTimePicker();
     private DateTimePicker dtp2 = new DateTimePicker();
     private Button button1 = new Button();
+    private Button button2 = new Button();
+    private TextBox textBox1 = new TextBox();
     private ToolStripStatusLabel toolStripStatusLabel = new ToolStripStatusLabel();
-    private const string statusDefaultValue = "日付を入力して集計ボタンをクリックしてください。";
+    private DataGridView dataGridView1 = new DataGridView();
+    private SortableBindingList<Columns1> dataSource1 = new SortableBindingList<Columns1>();
+    private CancellationTokenSource cts = new CancellationTokenSource();
     
     private string directory = string.Empty;
     private string encoding = string.Empty;
-    private CancellationTokenSource cts = new CancellationTokenSource();
+    private bool doublebuffered = false;
+    private const string LogFileName = "watch.txt";
     
-    public SubForm1(string directory, string encoding)
+    public SubForm1(string directory, string encoding, bool doublebuffered)
     {
         // フォーム
         this.Text = "WATCH";
-        this.Size = new Size(260, 120);
-        this.MaximizeBox = false;
+        this.Size = new Size(635, 490);
+        this.MaximizeBox = true;
         this.MinimizeBox = true;
+        this.MinimumSize = this.Size;
         this.StartPosition = FormStartPosition.CenterScreen;
-        this.FormBorderStyle = FormBorderStyle.FixedDialog;
+        this.FormBorderStyle = FormBorderStyle.Sizable;
+        this.Load += OnFormLoad;
         this.FormClosing += OnFormClosing;
         this.Icon = Icon.ExtractAssociatedIcon(Process.GetCurrentProcess().MainModule.FileName);
         
+        // ラベル1
+        var label1 = new Label();
+        label1.Location = new Point(10, 10);
+        label1.Size = new Size(55, 20);
+        label1.TextAlign = ContentAlignment.MiddleLeft;
+        label1.Text = "対象日付";
+        this.Controls.Add(label1);
+        
         // 日付入力1
-        dtp1.Location = new Point(10, 10);
-        dtp1.Size = new Size(105, 20);
+        dtp1.Location = new Point(70, 10);
+        dtp1.Size = new Size(140, 20);
         dtp1.Value = DateTime.Today.AddDays(-6);
+        dtp1.Format = DateTimePickerFormat.Custom;
+        dtp1.CustomFormat = "yyyy/MM/dd dddd";
         dtp1.ValueChanged += Dtp1_ValueChanged;
         this.Controls.Add(dtp1);
         
-        // ～
-        var label1 = new Label();
-        label1.Location = new Point(120, 15);
-        label1.Size = new Size(20, 20);
-        label1.Text = "～";
-        this.Controls.Add(label1);
+        // ラベル2
+        var label2 = new Label();
+        label2.Location = new Point(215, 10);
+        label2.Size = new Size(20, 20);
+        label2.TextAlign = ContentAlignment.MiddleCenter;
+        label2.Text = "～";
+        this.Controls.Add(label2);
         
         // 日付入力2
-        dtp2.Location = new Point(140, 10);
-        dtp2.Size = new Size(105, 20);
+        dtp2.Location = new Point(240, 10);
+        dtp2.Size = new Size(140, 20);
         dtp2.Value = DateTime.Today;
+        dtp2.Format = DateTimePickerFormat.Custom;
+        dtp2.CustomFormat = "yyyy/MM/dd dddd";
         dtp2.ValueChanged += Dtp2_ValueChanged;
         this.Controls.Add(dtp2);
         
-        // 集計ボタン
-        button1.Location = new Point(10, 40);
-        button1.Size = new Size(235, 20);
+        // ボタン1
+        button1.Location = new Point(390, 10);
+        button1.Size = new Size(40, 20);
         button1.Text = "集計";
         button1.Click += Button1_Click;
         this.Controls.Add(button1);
+        
+        // ラベル3
+        var label3 = new Label();
+        label3.Location = new Point(440, 10);
+        label3.Size = new Size(55, 20);
+        label3.TextAlign = ContentAlignment.MiddleLeft;
+        label3.Text = "合計時間";
+        this.Controls.Add(label3);
+        
+        // テキストボックス1
+        textBox1.Location = new Point(500, 10);
+        textBox1.Size = new Size(60, 20);
+        textBox1.Text = TimeSpanToString(new TimeSpan());
+        textBox1.TextAlign = HorizontalAlignment.Center;
+        textBox1.ReadOnly = true;
+        this.Controls.Add(textBox1);
+        
+        // ボタン2
+        button2.Location = new Point(570, 10);
+        button2.Size = new Size(40, 20);
+        button2.Text = "ログ";
+        button2.Enabled = false;
+        button2.Click += Button2_Click;
+        this.Controls.Add(button2);
+        
+        // データグリッドビュー1
+        dataGridView1.Location = new Point(10, 40);
+        dataGridView1.Size = new Size(600, 380);
+        dataGridView1.DataSource = dataSource1;
+        dataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        dataGridView1.AllowUserToAddRows = false;
+        dataGridView1.AllowUserToDeleteRows = false;
+        dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        dataGridView1.RowHeadersWidthSizeMode = DataGridViewRowHeadersWidthSizeMode.EnableResizing;
+        dataGridView1.AllowUserToResizeColumns = false;
+        dataGridView1.AllowUserToResizeRows = false;
+        dataGridView1.MultiSelect = true;
+        dataGridView1.ReadOnly = true;
+        dataGridView1.RowHeadersVisible = false;
+        dataGridView1.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        dataGridView1.AlternatingRowsDefaultCellStyle.BackColor = Color.WhiteSmoke;
+        dataGridView1.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+        this.Controls.Add(dataGridView1);
         
         // ステータスバー
         var statusStrip = new StatusStrip();
         statusStrip.SizingGrip = false;
         statusStrip.Items.Add(toolStripStatusLabel);
-        toolStripStatusLabel.Text = statusDefaultValue;
+        toolStripStatusLabel.Text = "対象日付を入力して集計ボタンをクリックしてください。";
         this.Controls.Add(statusStrip);
         
         this.directory = directory;
         this.encoding = encoding;
+        this.doublebuffered = doublebuffered;
+    }
+    
+    private class Columns1
+    {
+        [DisplayName("プロセス")]
+        public string ProcessName { get; set; }
+        
+        [DisplayName("タイトル")]
+        public string Title { get; set; }
+        
+        [DisplayName("作業時間")]
+        public string ShowWorkTime { get { return TimeSpanToString(WorkTime); } }
+        
+        [Browsable(false)]
+        public TimeSpan WorkTime { get; set; }
+    }
+    
+    private void OnFormLoad(object sender, EventArgs e)
+    {
+        if(doublebuffered)
+        {
+            dataGridView1.GetType().InvokeMember("DoubleBuffered", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.SetProperty, null, dataGridView1, new object[]{ true });
+        }
+        ResizeDataGridView1();
     }
     
     private void OnFormClosing(object sender, FormClosingEventArgs e)
@@ -387,18 +475,40 @@ class SubForm1 : Form
         SummaryExecute();
     }
     
+    private void Button2_Click(object sender, EventArgs e)
+    {
+        if(File.Exists(LogFileName))
+        {
+            Process.Start(LogFileName);
+        }
+    }
+    
     private async void SummaryExecute()
     {
-        dtp1.Enabled = false;
-        dtp2.Enabled = false;
-        button1.Enabled = false;
+        SetControlsEnabled(false);
         
         await Task.Run(() => SummaryLogFiles(cts.Token));
         
-        dtp1.Enabled = true;
-        dtp2.Enabled = true;
-        button1.Enabled = true;
-        toolStripStatusLabel.Text = statusDefaultValue;
+        if(!cts.Token.IsCancellationRequested)
+        {
+            SetDataGridView1();
+            SetControlsEnabled(true);
+            toolStripStatusLabel.Text = "集計期間 : " + dtp1.Value.ToString("yyyy/MM/dd dddd") + " ～ " + dtp2.Value.ToString("yyyy/MM/dd dddd");
+            if(dataSource1.Count == 0)
+            {
+                button2.Enabled = false;
+                MessageBox.Show("対象日付の期間内に記録されたログファイルが存在しません。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+    }
+    
+    private void SetControlsEnabled(bool enabled)
+    {
+        dtp1.Enabled = enabled;
+        dtp2.Enabled = enabled;
+        button1.Enabled = enabled;
+        button2.Enabled = enabled;
+        textBox1.Enabled = enabled;
     }
     
     private void SummaryLogFiles(CancellationToken ct)
@@ -453,35 +563,94 @@ class SubForm1 : Form
                 }
             }
         }
-        if(table.Count() > 0)
-        {
-            CreateList(table);
-        }
-        else
-        {
-            MessageBox.Show("指定された期間内に記録されたログファイルが存在しません。", this.Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
+        CreateList(table);
     }
     
     private void CreateList(Dictionary<Tuple<string, string>, long> table)
     {
-        var name = "watch.txt";
-        if(File.Exists(name))
+        if(File.Exists(LogFileName))
         {
-            File.Delete(name);
+            File.Delete(LogFileName);
         }
         
+        toolStripStatusLabel.Text = "保存中...(" + LogFileName + ")";
+            
         // ヘッダ行
         var header = "\"プロセス\",\"タイトル\",\"時間\"" + Environment.NewLine;
-        File.AppendAllText(name, header, Encoding.GetEncoding(encoding));
-        
+        File.AppendAllText(LogFileName, header, Encoding.GetEncoding(encoding));
+            
         // 明細行
         foreach(var row in table.OrderByDescending(r => r.Value).ThenBy(r => r.Key.Item1).ThenBy(r => r.Key.Item2))
         {
             var log = "\"" + row.Key.Item1 + "\",\"" + row.Key.Item2 + "\",\"" + TimeSpan.FromMilliseconds(row.Value) + "\"" + Environment.NewLine;
-            File.AppendAllText(name, log, Encoding.GetEncoding(encoding));
+            File.AppendAllText(LogFileName, log, Encoding.GetEncoding(encoding));
         }
-        Process.Start(name);
+    }
+    
+    private void SetDataGridView1()
+    {
+        dataSource1.Clear();
+        dataSource1.RemoveSort();
+        dataSource1.RaiseListChangedEvents = false;
+        var totalTime = new TimeSpan();
+        if(File.Exists(LogFileName))
+        {
+            using(var parser = new TextFieldParser(LogFileName, Encoding.GetEncoding(encoding)))
+            {
+                parser.TextFieldType = FieldType.Delimited;
+                parser.SetDelimiters(",");
+                parser.HasFieldsEnclosedInQuotes = false;
+                parser.TrimWhiteSpace = true;
+                while(!parser.EndOfData)
+                {
+                    string[] fields = parser.ReadFields();
+                    if(fields.Count() < 3)
+                    {
+                        continue;
+                    }
+                    for(var i = 0; i < fields.Length; i++)
+                    {
+                        fields[i] = fields[i].Trim('"');
+                    }
+                    TimeSpan timeSpan;
+                    if(!TimeSpan.TryParse(fields[2], out timeSpan))
+                    {
+                        continue;
+                    }
+                    totalTime += timeSpan;
+                    var row = new Columns1();
+                    row.ProcessName = fields[0];
+                    row.Title = fields[1];
+                    row.WorkTime = timeSpan;
+                    dataSource1.Add(row);
+                }
+            }
+        }
+        textBox1.Text = TimeSpanToString(totalTime);
+        dataSource1.RaiseListChangedEvents = true;
+        dataSource1.ResetBindings();
+        ResizeDataGridView1();
+    }
+    
+    private void ResizeDataGridView1()
+    {
+        if(dataSource1.Count > 0)
+        {
+            dataGridView1.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+            dataGridView1.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            dataGridView1.Columns[2].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
+        }
+        else
+        {
+            dataGridView1.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+            dataGridView1.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            dataGridView1.Columns[2].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+        }
+    }
+    
+    private static string TimeSpanToString(TimeSpan timeSpan)
+    {
+        return (timeSpan.Days * 24 + timeSpan.Hours).ToString("00") + ":" + timeSpan.Minutes.ToString("00") + ":" + timeSpan.Seconds.ToString("00");
     }
 }
 
@@ -493,25 +662,27 @@ class SubForm2 : Form
     private Button button3 = new Button();
     private Button button4 = new Button();
     private TextBox textBox1 = new TextBox();
+    private TextBox textBox2 = new TextBox();
     private DataGridView dataGridView1 = new DataGridView();
     private SortableBindingList<Columns1> dataSource1 = new SortableBindingList<Columns1>();
     
     private string directory = string.Empty;
     private string encoding = string.Empty;
     private bool doublebuffered = false;
+    private const string LogFileName = "watch.txt";
     
     public SubForm2(string directory, string encoding, bool doublebuffered)
     {
         // フォーム
         this.Text = "WATCH";
-        this.Size = new Size(520, 490);
+        this.Size = new Size(635, 490);
         this.MaximizeBox = true;
         this.MinimizeBox = true;
         this.MinimumSize = this.Size;
         this.StartPosition = FormStartPosition.CenterScreen;
         this.FormBorderStyle = FormBorderStyle.Sizable;
-        this.Icon = Icon.ExtractAssociatedIcon(Process.GetCurrentProcess().MainModule.FileName);
         this.Load += OnFormLoad;
+        this.Icon = Icon.ExtractAssociatedIcon(Process.GetCurrentProcess().MainModule.FileName);
         
         // ラベル1
         var label1 = new Label();
@@ -551,24 +722,32 @@ class SubForm2 : Form
         button3.Click += Button3_Click;
         this.Controls.Add(button3);
         
-        // ラベル2
-        var label2 = new Label();
-        label2.Location = new Point(320, 10);
-        label2.Size = new Size(55, 20);
-        label2.TextAlign = ContentAlignment.MiddleLeft;
-        label2.Text = "合計時間";
-        this.Controls.Add(label2);
-        
         // テキストボックス1
-        textBox1.Location = new Point(380, 10);
-        textBox1.Size = new Size(60, 20);
+        textBox1.Location = new Point(320, 10);
+        textBox1.Size = new Size(110, 20);
         textBox1.Text = string.Empty;
         textBox1.TextAlign = HorizontalAlignment.Center;
         textBox1.ReadOnly = true;
         this.Controls.Add(textBox1);
         
+        // ラベル2
+        var label2 = new Label();
+        label2.Location = new Point(440, 10);
+        label2.Size = new Size(55, 20);
+        label2.TextAlign = ContentAlignment.MiddleLeft;
+        label2.Text = "合計時間";
+        this.Controls.Add(label2);
+        
+        // テキストボックス2
+        textBox2.Location = new Point(500, 10);
+        textBox2.Size = new Size(60, 20);
+        textBox2.Text = string.Empty;
+        textBox2.TextAlign = HorizontalAlignment.Center;
+        textBox2.ReadOnly = true;
+        this.Controls.Add(textBox2);
+        
         // ボタン4
-        button4.Location = new Point(455, 10);
+        button4.Location = new Point(570, 10);
         button4.Size = new Size(40, 20);
         button4.Text = "ログ";
         button4.Click += Button4_Click;
@@ -576,7 +755,7 @@ class SubForm2 : Form
         
         // データグリッドビュー1
         dataGridView1.Location = new Point(10, 40);
-        dataGridView1.Size = new Size(485, 400);
+        dataGridView1.Size = new Size(600, 400);
         dataGridView1.DataSource = dataSource1;
         dataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
         dataGridView1.AllowUserToAddRows = false;
@@ -585,7 +764,7 @@ class SubForm2 : Form
         dataGridView1.RowHeadersWidthSizeMode = DataGridViewRowHeadersWidthSizeMode.EnableResizing;
         dataGridView1.AllowUserToResizeColumns = false;
         dataGridView1.AllowUserToResizeRows = false;
-        dataGridView1.MultiSelect = false;
+        dataGridView1.MultiSelect = true;
         dataGridView1.ReadOnly = true;
         dataGridView1.RowHeadersVisible = false;
         dataGridView1.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
@@ -654,12 +833,11 @@ class SubForm2 : Form
     
     private void Button4_Click(object sender, EventArgs e)
     {
-        var name1 = directory + @"\" + dtp1.Value.ToString("yyyyMMdd") + ".log";
-        if(File.Exists(name1))
+        var path = directory + @"\" + dtp1.Value.ToString("yyyyMMdd") + ".log";
+        if(File.Exists(path))
         {
-            var name2 = "watch.txt";
-            File.Copy(name1, name2, true);
-            Process.Start(name2);
+            File.Copy(path, LogFileName, true);
+            Process.Start(LogFileName);
         }
         else
         {
@@ -721,7 +899,8 @@ class SubForm2 : Form
                 }
             }
         }
-        textBox1.Text = totalTime.ToString();
+        textBox1.Text = dataSource1.Count > 0 ? dataSource1[0].StartTime.ToString("HH:mm:ss") + " - " + dataSource1[dataSource1.Count - 1].StartTime.ToString("HH:mm:ss") : "00:00:00 - 00:00:00";
+        textBox2.Text = totalTime.ToString();
         dataSource1.RaiseListChangedEvents = true;
         dataSource1.ResetBindings();
         ResizeDataGridView1();
